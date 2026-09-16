@@ -4,7 +4,9 @@ The App Store Connect API authenticates with a short-lived ES256 JWT signed by
 the private key (.p8) downloaded from App Store Connect > Users and Access >
 Integrations > App Store Connect API.
 
-Configuration comes from environment variables:
+Configuration comes from environment variables, which may also be written to
+a .env file at ~/.config/app-store-connect/.env (or $APP_STORE_CONNECT_ENV_FILE,
+or .env in the working directory). Real environment variables win over the file.
 
 - APP_STORE_CONNECT_KEY_ID: the key ID shown next to the key.
 - APP_STORE_CONNECT_ISSUER_ID: the issuer ID of the team key. Leave unset for
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 
 import jwt
 
@@ -37,8 +40,39 @@ PRIVATE_KEY_PATH_ENV = "APP_STORE_CONNECT_PRIVATE_KEY_PATH"
 VENDOR_NUMBER_ENV = "APP_STORE_CONNECT_VENDOR_NUMBER"
 
 
+ENV_FILE_ENV = "APP_STORE_CONNECT_ENV_FILE"
+DEFAULT_ENV_FILES = (
+    Path.home() / ".config" / "app-store-connect" / ".env",
+    Path(".env"),
+)
+
+_env_files_loaded = False
+
+
 class CredentialsError(RuntimeError):
     pass
+
+
+def load_env_files() -> None:
+    """Fill unset variables from the first readable .env file, once per process."""
+    global _env_files_loaded
+    if _env_files_loaded:
+        return
+    _env_files_loaded = True
+    override = os.environ.get(ENV_FILE_ENV)
+    candidates = (Path(override).expanduser(),) if override else DEFAULT_ENV_FILES
+    for candidate in candidates:
+        try:
+            content = candidate.read_text()
+        except OSError:
+            continue
+        for line in content.splitlines():
+            entry = line.strip().removeprefix("export ").strip()
+            if not entry or entry.startswith("#") or "=" not in entry:
+                continue
+            name, _, value = entry.partition("=")
+            os.environ.setdefault(name.strip(), value.strip().strip("\"'"))
+        return
 
 
 _cached_token: tuple[str, float] | None = None
@@ -65,6 +99,7 @@ def _private_key() -> str:
 def get_token() -> str:
     """Return a cached bearer token, signing a new one shortly before expiry."""
     global _cached_token
+    load_env_files()
     now = time.time()
     if _cached_token and _cached_token[1] - now > RENEW_MARGIN:
         return _cached_token[0]
@@ -102,6 +137,7 @@ def get_token() -> str:
 
 def get_vendor_number(explicit: str | None = None) -> str:
     """Resolve the vendor number for the sales and finance report endpoints."""
+    load_env_files()
     vendor_number = explicit or os.environ.get(VENDOR_NUMBER_ENV)
     if not vendor_number:
         raise CredentialsError(
@@ -113,5 +149,6 @@ def get_vendor_number(explicit: str | None = None) -> str:
 
 
 def reset_cache() -> None:
-    global _cached_token
+    global _cached_token, _env_files_loaded
     _cached_token = None
+    _env_files_loaded = False

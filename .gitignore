@@ -7,3 +7,4 @@ __pycache__/
 .ruff_cache/
 # safety net: never commit App Store Connect private keys
 *.p8
+.env

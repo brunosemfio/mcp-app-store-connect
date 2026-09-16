@@ -59,6 +59,29 @@ export APP_STORE_CONNECT_PRIVATE_KEY_PATH=~/.appstoreconnect/private_keys/AuthKe
 export APP_STORE_CONNECT_VENDOR_NUMBER=12345678   # só para sales/finance
 ```
 
+Em vez de exportar (ou de repetir `--env` no registro do MCP), dá para deixar
+tudo num arquivo `.env` — o servidor lê o primeiro que encontrar:
+
+1. `$APP_STORE_CONNECT_ENV_FILE`, se definido;
+2. `~/.config/app-store-connect/.env`;
+3. `.env` no diretório de trabalho.
+
+```bash
+mkdir -p ~/.config/app-store-connect
+cat > ~/.config/app-store-connect/.env <<'ENV'
+APP_STORE_CONNECT_KEY_ID=2X9R4HXF34
+APP_STORE_CONNECT_ISSUER_ID=57246542-96fe-1a63-e053-0824d011072a
+APP_STORE_CONNECT_PRIVATE_KEY_PATH=/Users/voce/.appstoreconnect/private_keys/AuthKey_2X9R4HXF34.p8
+APP_STORE_CONNECT_VENDOR_NUMBER=12345678
+ENV
+chmod 600 ~/.config/app-store-connect/.env
+```
+
+Variáveis já presentes no ambiente têm prioridade sobre o arquivo, o arquivo é
+lido uma vez por processo e a ausência dele não é erro. Aceita `export ` no
+começo da linha, comentários com `#` e valores entre aspas. Use caminho
+absoluto no `.p8`: o `~` não é expandido dentro do arquivo.
+
 - Chaves **individuais** (sem Issuer ID) funcionam: deixe `APP_STORE_CONNECT_ISSUER_ID` sem definir e o token é assinado com `sub: user`.
 - Em vez do caminho, dá para passar o PEM inline em `APP_STORE_CONNECT_PRIVATE_KEY`.
 - O vendor number aparece em App Store Connect → Payments and Financial Reports.
@@ -100,12 +123,10 @@ Registrando no Claude Code:
 
 ```bash
 claude mcp add app-store-connect \
-  --env APP_STORE_CONNECT_KEY_ID=2X9R4HXF34 \
-  --env APP_STORE_CONNECT_ISSUER_ID=57246542-96fe-1a63-e053-0824d011072a \
-  --env APP_STORE_CONNECT_PRIVATE_KEY_PATH=/caminho/AuthKey_2X9R4HXF34.p8 \
-  --env APP_STORE_CONNECT_VENDOR_NUMBER=12345678 \
   -- uvx --from git+https://github.com/brunosemfio/mcp-app-store-connect.git app-store-connect-mcp
 ```
+
+(com o `.env` acima; sem ele, passe cada valor com `--env APP_STORE_CONNECT_KEY_ID=...`)
 
 Ou em um `mcp.json` genérico:
 
@@ -120,10 +141,7 @@ Ou em um `mcp.json` genérico:
         "app-store-connect-mcp"
       ],
       "env": {
-        "APP_STORE_CONNECT_KEY_ID": "2X9R4HXF34",
-        "APP_STORE_CONNECT_ISSUER_ID": "57246542-96fe-1a63-e053-0824d011072a",
-        "APP_STORE_CONNECT_PRIVATE_KEY_PATH": "/caminho/AuthKey_2X9R4HXF34.p8",
-        "APP_STORE_CONNECT_VENDOR_NUMBER": "12345678"
+        "APP_STORE_CONNECT_ENV_FILE": "/Users/voce/.config/app-store-connect/.env"
       }
     }
   }

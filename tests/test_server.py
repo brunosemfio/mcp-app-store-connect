@@ -1,4 +1,5 @@
 import gzip
+import os
 import time
 
 import pytest
@@ -9,6 +10,14 @@ from app_store_connect_mcp import api, auth, server
 def _tool(name):
     tool = getattr(server, name)
     return getattr(tool, "fn", tool)
+
+
+@pytest.fixture(autouse=True)
+def isolate_env_files(monkeypatch, tmp_path):
+    monkeypatch.setenv(auth.ENV_FILE_ENV, str(tmp_path / "absent.env"))
+    auth.reset_cache()
+    yield
+    auth.reset_cache()
 
 
 def _page(*items):
@@ -288,6 +297,39 @@ def test_missing_credentials_are_reported_clearly(monkeypatch):
     with pytest.raises(auth.CredentialsError, match=auth.PRIVATE_KEY_PATH_ENV):
         auth.get_token()
     auth.reset_cache()
+
+
+def test_env_file_fills_missing_variables(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "# credenciais\n"
+        "export APP_STORE_CONNECT_KEY_ID=FROMFILE12\n"
+        'APP_STORE_CONNECT_VENDOR_NUMBER="87654321"\n'
+        "\n"
+    )
+    monkeypatch.setenv(auth.ENV_FILE_ENV, str(env_file))
+    monkeypatch.delenv(auth.KEY_ID_ENV, raising=False)
+    monkeypatch.delenv(auth.VENDOR_NUMBER_ENV, raising=False)
+    auth.reset_cache()
+
+    assert auth.get_vendor_number() == "87654321"
+    assert os.environ[auth.KEY_ID_ENV] == "FROMFILE12"
+
+
+def test_real_environment_wins_over_env_file(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("APP_STORE_CONNECT_VENDOR_NUMBER=11111111\n")
+    monkeypatch.setenv(auth.ENV_FILE_ENV, str(env_file))
+    monkeypatch.setenv(auth.VENDOR_NUMBER_ENV, "22222222")
+    auth.reset_cache()
+
+    assert auth.get_vendor_number() == "22222222"
+
+
+def test_missing_env_file_is_not_an_error(monkeypatch, tmp_path):
+    monkeypatch.setenv(auth.ENV_FILE_ENV, str(tmp_path / "nope.env"))
+    auth.reset_cache()
+    auth.load_env_files()
 
 
 def _generate_p8() -> str:
