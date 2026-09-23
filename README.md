@@ -35,11 +35,35 @@ Servidor MCP (Model Context Protocol) para puxar dados de analytics e relatório
 
 Todas as ferramentas são somente-leitura (`readOnlyHint`), exceto `create_report_request`.
 
+## Pré-requisitos
+
+- [uv](https://docs.astral.sh/uv/): baixa e executa o servidor. Se a máquina não tiver Python 3.10 ou mais novo, o `uv` baixa um sozinho.
+- [git](https://git-scm.com/): o `uvx` usa o git para baixar o código deste repositório.
+
+**macOS**, com [Homebrew](https://brew.sh/):
+
+```bash
+brew install uv git
+```
+
+Sem Homebrew, instale o uv com `curl -LsSf https://astral.sh/uv/install.sh | sh` e o git com `xcode-select --install`.
+
+**Windows**, no PowerShell:
+
+```powershell
+winget install --id=astral-sh.uv -e
+winget install --id=Git.Git -e
+```
+
+Depois de instalar, feche e abra o PowerShell de novo. Sem isso, o terminal não encontra os comandos `uv` e `git`.
+
 ## Configuração
 
 ### 1. Crie uma chave da App Store Connect API
 
 Em [App Store Connect → Users and Access → Integrations → App Store Connect API](https://appstoreconnect.apple.com/access/integrations/api), gere uma chave e baixe o arquivo `AuthKey_XXXXXXXXXX.p8` (só é possível baixar uma vez). Anote o **Key ID** e o **Issuer ID**.
+
+Guarde o `.p8` num local fixo e anote o caminho completo. Exemplos: `/Users/voce/.appstoreconnect/private_keys/AuthKey_2X9R4HXF34.p8` no macOS e `C:\Users\voce\.appstoreconnect\private_keys\AuthKey_2X9R4HXF34.p8` no Windows.
 
 O papel da chave define o que dá para ler:
 
@@ -50,23 +74,30 @@ O papel da chave define o que dá para ler:
 | Finance Reports | Finance |
 | Customer Reviews | Admin, App Manager, Developer ou Marketing |
 
-### 2. Variáveis de ambiente
+### 2. Credenciais
 
-```bash
-export APP_STORE_CONNECT_KEY_ID=2X9R4HXF34
-export APP_STORE_CONNECT_ISSUER_ID=57246542-96fe-1a63-e053-0824d011072a
-export APP_STORE_CONNECT_PRIVATE_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_2X9R4HXF34.p8
-export APP_STORE_CONNECT_VENDOR_NUMBER=12345678   # só para sales/finance
-```
+O servidor lê as credenciais destas variáveis de ambiente:
 
-Em vez de exportar (ou de repetir `--env` no registro do MCP), dá para deixar
-tudo num arquivo `.env` — o servidor lê o primeiro que encontrar:
+| Variável | Valor |
+|---|---|
+| `APP_STORE_CONNECT_KEY_ID` | Key ID da chave, ex. `2X9R4HXF34` |
+| `APP_STORE_CONNECT_ISSUER_ID` | Issuer ID, ex. `57246542-96fe-1a63-e053-0824d011072a` |
+| `APP_STORE_CONNECT_PRIVATE_KEY_PATH` | Caminho completo do `.p8` |
+| `APP_STORE_CONNECT_VENDOR_NUMBER` | Vendor number; só é necessário para sales e finance |
+
+Os valores vão no `--env` do Claude Code ou no bloco `env` do Claude Desktop quando você registrar o servidor no cliente MCP (seção [Instalação e uso](#instalação-e-uso)).
+
+- Chaves **individuais** (sem Issuer ID) funcionam: deixe `APP_STORE_CONNECT_ISSUER_ID` sem definir e o servidor assina o token com `sub: user`.
+- Em vez do caminho, dá para passar o PEM inline em `APP_STORE_CONNECT_PRIVATE_KEY`.
+- O vendor number aparece em App Store Connect → Payments and Financial Reports.
+
+**Arquivo `.env` (opcional):** para não repetir os valores em cada cliente MCP, grave as variáveis num arquivo `.env`. O servidor lê o primeiro arquivo que encontrar:
 
 1. `$APP_STORE_CONNECT_ENV_FILE`, se definido;
 2. `~/.config/app-store-connect/.env`;
 3. `.env` no diretório de trabalho.
 
-No macOS e no Linux:
+No macOS, no Terminal:
 
 ```bash
 mkdir -p ~/.config/app-store-connect
@@ -79,7 +110,7 @@ ENV
 chmod 600 ~/.config/app-store-connect/.env
 ```
 
-No Windows (PowerShell):
+No Windows, no PowerShell:
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\.config\app-store-connect" | Out-Null
@@ -91,14 +122,7 @@ APP_STORE_CONNECT_VENDOR_NUMBER=12345678
 "@ | Set-Content -Encoding utf8 "$HOME\.config\app-store-connect\.env"
 ```
 
-Variáveis já presentes no ambiente têm prioridade sobre o arquivo, o arquivo é
-lido uma vez por processo e a ausência dele não é erro. Aceita `export ` no
-começo da linha, comentários com `#` e valores entre aspas. O `~` no caminho
-do `.p8` é expandido.
-
-- Chaves **individuais** (sem Issuer ID) funcionam: deixe `APP_STORE_CONNECT_ISSUER_ID` sem definir e o token é assinado com `sub: user`.
-- Em vez do caminho, dá para passar o PEM inline em `APP_STORE_CONNECT_PRIVATE_KEY`.
-- O vendor number aparece em App Store Connect → Payments and Financial Reports.
+Variáveis já definidas no ambiente, inclusive pelo `--env` ou pelo `env` do cliente MCP, têm prioridade sobre o arquivo. O servidor lê o arquivo uma vez por processo, e a ausência do arquivo não é erro. O arquivo aceita `export ` no começo da linha, comentários com `#` e valores entre aspas. O servidor expande o `~` no caminho do `.p8`.
 
 ### 3. Habilite os relatórios de analytics do app
 
@@ -127,78 +151,130 @@ create_report_request(app_id="1234567890", access_type="ONGOING")
 
 ### Direto do GitHub (recomendado)
 
-Com [uv](https://docs.astral.sh/uv/) instalado:
+Com os [pré-requisitos](#pré-requisitos) instalados, não é preciso clonar nada: o `uvx` baixa, instala e executa o servidor a partir deste repositório. Para testar, rode o comando abaixo, que é igual no macOS e no Windows:
 
 ```bash
 uvx --from git+https://github.com/brunosemfio/mcp-app-store-connect.git app-store-connect-mcp
 ```
 
-Registrando no Claude Code:
+Se o servidor subir sem erro, ele fica aguardando um cliente MCP. Encerre com Ctrl+C.
 
-```bash
-claude mcp add app-store-connect -- uvx --from git+https://github.com/brunosemfio/mcp-app-store-connect.git app-store-connect-mcp
-```
+#### Claude Code
 
-(com o `.env` acima; sem ele, passe cada valor com `--env APP_STORE_CONNECT_KEY_ID=...`)
+1. Registre o servidor. O `--scope user` deixa o servidor disponível em qualquer pasta. Sem o `--scope user`, o servidor só aparece na pasta onde você rodou o comando.
 
-### Claude Desktop
+   **macOS**, no Terminal:
 
-O Claude Desktop não tem comando para registrar MCP. Abra o `claude_desktop_config.json` em **Settings → Developer → Edit Config**, adicione o servidor e reinicie o app. No Windows, reinicie pelo ícone da bandeja: fechar a janela não encerra o app.
+   ```bash
+   claude mcp add --scope user app-store-connect \
+     --env APP_STORE_CONNECT_KEY_ID=2X9R4HXF34 \
+     --env APP_STORE_CONNECT_ISSUER_ID=57246542-96fe-1a63-e053-0824d011072a \
+     --env APP_STORE_CONNECT_PRIVATE_KEY_PATH=/Users/voce/.appstoreconnect/private_keys/AuthKey_2X9R4HXF34.p8 \
+     --env APP_STORE_CONNECT_VENDOR_NUMBER=12345678 \
+     -- uvx --from git+https://github.com/brunosemfio/mcp-app-store-connect.git app-store-connect-mcp
+   ```
 
-O Claude Desktop não herda o `PATH` do shell. Por isso `command` leva o caminho completo do `uvx`, obtido com `which uvx` no macOS ou `where.exe uvx` no Windows. Com `"command": "uvx"`, o servidor falha com `spawn uvx ENOENT`.
+   **Windows**, no PowerShell:
 
-macOS:
+   ```powershell
+   claude mcp add --scope user app-store-connect `
+     --env "APP_STORE_CONNECT_KEY_ID=2X9R4HXF34" `
+     --env "APP_STORE_CONNECT_ISSUER_ID=57246542-96fe-1a63-e053-0824d011072a" `
+     --env "APP_STORE_CONNECT_PRIVATE_KEY_PATH=C:\Users\voce\.appstoreconnect\private_keys\AuthKey_2X9R4HXF34.p8" `
+     --env "APP_STORE_CONNECT_VENDOR_NUMBER=12345678" `
+     -- uvx --from git+https://github.com/brunosemfio/mcp-app-store-connect.git app-store-connect-mcp
+   ```
 
-```json
-{
-  "mcpServers": {
-    "app-store-connect": {
-      "command": "/Users/voce/.local/bin/uvx",
-      "args": ["--from", "git+https://github.com/brunosemfio/mcp-app-store-connect.git", "app-store-connect-mcp"],
-      "env": {
-        "APP_STORE_CONNECT_KEY_ID": "2X9R4HXF34",
-        "APP_STORE_CONNECT_ISSUER_ID": "57246542-96fe-1a63-e053-0824d011072a",
-        "APP_STORE_CONNECT_PRIVATE_KEY_PATH": "~/.appstoreconnect/private_keys/AuthKey_2X9R4HXF34.p8",
-        "APP_STORE_CONNECT_VENDOR_NUMBER": "12345678"
-      }
-    }
-  }
-}
-```
+   - Troque os valores de `--env` pelos da sua chave.
+   - Com chave individual, remova a linha do `APP_STORE_CONNECT_ISSUER_ID`.
+   - Sem sales e finance, remova a linha do `APP_STORE_CONNECT_VENDOR_NUMBER`.
+   - Com o arquivo `.env` da seção 2, remova todas as linhas `--env`.
 
-Windows (no JSON, cada `\` do caminho vira `\\`):
+2. Rode `claude mcp list`. O `app-store-connect` deve aparecer como conectado.
 
-```json
-{
-  "mcpServers": {
-    "app-store-connect": {
-      "command": "C:\\Users\\voce\\.local\\bin\\uvx.exe",
-      "args": ["--from", "git+https://github.com/brunosemfio/mcp-app-store-connect.git", "app-store-connect-mcp"],
-      "env": {
-        "APP_STORE_CONNECT_KEY_ID": "2X9R4HXF34",
-        "APP_STORE_CONNECT_ISSUER_ID": "57246542-96fe-1a63-e053-0824d011072a",
-        "APP_STORE_CONNECT_PRIVATE_KEY_PATH": "C:\\Users\\voce\\.appstoreconnect\\private_keys\\AuthKey_2X9R4HXF34.p8",
-        "APP_STORE_CONNECT_VENDOR_NUMBER": "12345678"
-      }
-    }
-  }
-}
-```
+3. Numa conversa nova do Claude Code, peça "liste os apps que você enxerga no App Store Connect". Se o servidor estiver funcionando, o Claude chama a ferramenta `list_apps` e mostra os apps. Se der erro, digite `/mcp` dentro do Claude Code para ver o status do servidor.
 
-Com o `.env` da seção 2, o bloco `env` é dispensável. Outros clientes MCP usam o mesmo formato de `mcpServers`.
+Para trocar algum valor, remova o servidor com `claude mcp remove --scope user app-store-connect` e registre de novo pelo passo 1.
 
-O `uvx` faz cache do build: para atualizar após novos commits, rode uma vez com `--refresh`. Para fixar uma versão, aponte para uma tag ou commit: `git+https://...@<tag-ou-sha>`.
+#### Claude Desktop
+
+1. Descubra o caminho completo do `uvx`. O Claude Desktop aberto pelo Dock ou pelo menu Iniciar pode não enxergar o PATH do terminal e falhar com `spawn uvx ENOENT`. Com o caminho completo, o app não depende do PATH.
+   - macOS: rode `which uvx`. Em Macs com Apple Silicon e Homebrew, o resultado costuma ser `/opt/homebrew/bin/uvx`.
+   - Windows: rode `where.exe uvx` no PowerShell.
+
+2. Abra o arquivo de configuração do Claude Desktop. Pelo app, o caminho é **Settings → Developer → Edit Config**. Pelo terminal, os comandos abaixo criam o arquivo se ele ainda não existir e não apagam um arquivo existente.
+
+   **macOS**, no Terminal (abre no TextEdit):
+
+   ```bash
+   mkdir -p ~/Library/Application\ Support/Claude
+   touch ~/Library/Application\ Support/Claude/claude_desktop_config.json
+   open -e ~/Library/Application\ Support/Claude/claude_desktop_config.json
+   ```
+
+   **Windows**, no PowerShell (abre no Bloco de Notas):
+
+   ```powershell
+   $config = "$env:APPDATA\Claude\claude_desktop_config.json"
+   if (-not (Test-Path $config)) { New-Item -ItemType File -Force $config | Out-Null }
+   notepad $config
+   ```
+
+3. Adicione o servidor ao arquivo e salve. Se o arquivo estiver vazio, cole o bloco inteiro abaixo. Se o arquivo já tiver `mcpServers`, inclua só a entrada `app-store-connect` dentro dele. Se o arquivo tiver outras chaves mas não tiver `mcpServers`, acrescente a chave `mcpServers` ao objeto principal.
+
+   ```json
+   {
+     "mcpServers": {
+       "app-store-connect": {
+         "command": "/opt/homebrew/bin/uvx",
+         "args": [
+           "--from",
+           "git+https://github.com/brunosemfio/mcp-app-store-connect.git",
+           "app-store-connect-mcp"
+         ],
+         "env": {
+           "APP_STORE_CONNECT_KEY_ID": "2X9R4HXF34",
+           "APP_STORE_CONNECT_ISSUER_ID": "57246542-96fe-1a63-e053-0824d011072a",
+           "APP_STORE_CONNECT_PRIVATE_KEY_PATH": "/Users/voce/.appstoreconnect/private_keys/AuthKey_2X9R4HXF34.p8",
+           "APP_STORE_CONNECT_VENDOR_NUMBER": "12345678"
+         }
+       }
+     }
+   }
+   ```
+
+   - Troque `/opt/homebrew/bin/uvx` pelo caminho do passo 1 e os valores de `env` pelos da sua chave.
+   - No Windows, dobre as barras invertidas nos dois caminhos, como o JSON exige. Exemplo: `"C:\\Users\\voce\\.appstoreconnect\\private_keys\\AuthKey_2X9R4HXF34.p8"`.
+   - Com chave individual, remova a linha do `APP_STORE_CONNECT_ISSUER_ID`.
+   - Sem sales e finance, remova a linha do `APP_STORE_CONNECT_VENDOR_NUMBER` e apague a vírgula que sobrar no fim da linha de cima.
+   - Com o arquivo `.env` da seção 2, remova o bloco `env` inteiro e apague a vírgula que sobrar depois do `]` de `args`.
+
+4. Encerre o Claude Desktop e abra de novo. Fechar a janela não basta, porque o app continua rodando com a configuração antiga. No macOS, use Cmd+Q. No Windows, clique com o botão direito no ícone do Claude na bandeja do sistema e escolha Sair.
+
+5. Numa conversa nova, peça "liste os apps que você enxerga no App Store Connect". Se o servidor estiver funcionando, o Claude chama a ferramenta `list_apps` e mostra os apps. Se der erro, veja o log do servidor:
+   - macOS: `~/Library/Logs/Claude/mcp-server-app-store-connect.log`
+   - Windows: `%APPDATA%\Claude\logs\mcp-server-app-store-connect.log`
+
+Outros clientes MCP aceitam o mesmo bloco `mcpServers` do passo 3 no arquivo de configuração deles.
+
+O `uvx` faz cache do build: para atualizar após novos commits, rode o comando uma vez com `--refresh`. Para fixar uma versão, aponte para uma tag ou commit: `git+https://...@<tag-ou-sha>`.
 
 ### A partir de um clone local (desenvolvimento)
+
+Os comandos são iguais no macOS e no Windows:
 
 ```bash
 git clone https://github.com/brunosemfio/mcp-app-store-connect.git
 cd mcp-app-store-connect
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
-app-store-connect-mcp            # stdio (padrão)
-app-store-connect-mcp --transport streamable-http --port 8000
+uv sync
+uv run app-store-connect-mcp            # stdio (padrão)
+uv run app-store-connect-mcp --transport streamable-http --port 8000
 ```
+
+Para registrar no cliente MCP, use como comando o executável que o `uv sync` cria dentro do clone:
+
+- macOS: `/caminho/do/clone/.venv/bin/app-store-connect-mcp`
+- Windows: `C:\caminho\do\clone\.venv\Scripts\app-store-connect-mcp.exe`
 
 ## Desenvolvimento
 
@@ -211,6 +287,15 @@ uv run mypy app_store_connect_mcp
 # Testes de integração (batem na API real; precisam de credenciais):
 APP_STORE_CONNECT_KEY_ID=... APP_STORE_CONNECT_ISSUER_ID=... \
 APP_STORE_CONNECT_PRIVATE_KEY_PATH=... uv run pytest -m integration
+```
+
+No PowerShell, defina as variáveis antes do comando:
+
+```powershell
+$env:APP_STORE_CONNECT_KEY_ID = "..."
+$env:APP_STORE_CONNECT_ISSUER_ID = "..."
+$env:APP_STORE_CONNECT_PRIVATE_KEY_PATH = "C:\caminho\AuthKey.p8"
+uv run pytest -m integration
 ```
 
 O CI (GitHub Actions, branch `main`) roda ruff, mypy e a suíte unitária com cobertura mínima de 65% em Python 3.10 e 3.12.
