@@ -63,7 +63,7 @@ def load_env_files() -> None:
     candidates = (Path(override).expanduser(),) if override else DEFAULT_ENV_FILES
     for candidate in candidates:
         try:
-            content = candidate.read_text()
+            content = candidate.read_text(encoding="utf-8-sig")
         except OSError:
             continue
         for line in content.splitlines():

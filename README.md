@@ -66,6 +66,8 @@ tudo num arquivo `.env` — o servidor lê o primeiro que encontrar:
 2. `~/.config/app-store-connect/.env`;
 3. `.env` no diretório de trabalho.
 
+No macOS e no Linux:
+
 ```bash
 mkdir -p ~/.config/app-store-connect
 cat > ~/.config/app-store-connect/.env <<'ENV'
@@ -75,6 +77,18 @@ APP_STORE_CONNECT_PRIVATE_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_2X9R4
 APP_STORE_CONNECT_VENDOR_NUMBER=12345678
 ENV
 chmod 600 ~/.config/app-store-connect/.env
+```
+
+No Windows (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.config\app-store-connect" | Out-Null
+@"
+APP_STORE_CONNECT_KEY_ID=2X9R4HXF34
+APP_STORE_CONNECT_ISSUER_ID=57246542-96fe-1a63-e053-0824d011072a
+APP_STORE_CONNECT_PRIVATE_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_2X9R4HXF34.p8
+APP_STORE_CONNECT_VENDOR_NUMBER=12345678
+"@ | Set-Content -Encoding utf8 "$HOME\.config\app-store-connect\.env"
 ```
 
 Variáveis já presentes no ambiente têm prioridade sobre o arquivo, o arquivo é
@@ -122,31 +136,56 @@ uvx --from git+https://github.com/brunosemfio/mcp-app-store-connect.git app-stor
 Registrando no Claude Code:
 
 ```bash
-claude mcp add app-store-connect \
-  -- uvx --from git+https://github.com/brunosemfio/mcp-app-store-connect.git app-store-connect-mcp
+claude mcp add app-store-connect -- uvx --from git+https://github.com/brunosemfio/mcp-app-store-connect.git app-store-connect-mcp
 ```
 
 (com o `.env` acima; sem ele, passe cada valor com `--env APP_STORE_CONNECT_KEY_ID=...`)
 
-Ou em um `mcp.json` genérico:
+### Claude Desktop
+
+O Claude Desktop não tem comando para registrar MCP. Abra o `claude_desktop_config.json` em **Settings → Developer → Edit Config**, adicione o servidor e reinicie o app. No Windows, reinicie pelo ícone da bandeja: fechar a janela não encerra o app.
+
+O Claude Desktop não herda o `PATH` do shell. Por isso `command` leva o caminho completo do `uvx`, obtido com `which uvx` no macOS ou `where.exe uvx` no Windows. Com `"command": "uvx"`, o servidor falha com `spawn uvx ENOENT`.
+
+macOS:
 
 ```json
 {
   "mcpServers": {
     "app-store-connect": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/brunosemfio/mcp-app-store-connect.git",
-        "app-store-connect-mcp"
-      ],
+      "command": "/Users/voce/.local/bin/uvx",
+      "args": ["--from", "git+https://github.com/brunosemfio/mcp-app-store-connect.git", "app-store-connect-mcp"],
       "env": {
-        "APP_STORE_CONNECT_ENV_FILE": "/Users/voce/.config/app-store-connect/.env"
+        "APP_STORE_CONNECT_KEY_ID": "2X9R4HXF34",
+        "APP_STORE_CONNECT_ISSUER_ID": "57246542-96fe-1a63-e053-0824d011072a",
+        "APP_STORE_CONNECT_PRIVATE_KEY_PATH": "~/.appstoreconnect/private_keys/AuthKey_2X9R4HXF34.p8",
+        "APP_STORE_CONNECT_VENDOR_NUMBER": "12345678"
       }
     }
   }
 }
 ```
+
+Windows (no JSON, cada `\` do caminho vira `\\`):
+
+```json
+{
+  "mcpServers": {
+    "app-store-connect": {
+      "command": "C:\\Users\\voce\\.local\\bin\\uvx.exe",
+      "args": ["--from", "git+https://github.com/brunosemfio/mcp-app-store-connect.git", "app-store-connect-mcp"],
+      "env": {
+        "APP_STORE_CONNECT_KEY_ID": "2X9R4HXF34",
+        "APP_STORE_CONNECT_ISSUER_ID": "57246542-96fe-1a63-e053-0824d011072a",
+        "APP_STORE_CONNECT_PRIVATE_KEY_PATH": "C:\\Users\\voce\\.appstoreconnect\\private_keys\\AuthKey_2X9R4HXF34.p8",
+        "APP_STORE_CONNECT_VENDOR_NUMBER": "12345678"
+      }
+    }
+  }
+}
+```
+
+Com o `.env` da seção 2, o bloco `env` é dispensável. Outros clientes MCP usam o mesmo formato de `mcpServers`.
 
 O `uvx` faz cache do build: para atualizar após novos commits, rode uma vez com `--refresh`. Para fixar uma versão, aponte para uma tag ou commit: `git+https://...@<tag-ou-sha>`.
 
@@ -154,8 +193,8 @@ O `uvx` faz cache do build: para atualizar após novos commits, rode uma vez com
 
 ```bash
 git clone https://github.com/brunosemfio/mcp-app-store-connect.git
-cd appstoreconnect-mcp
-python -m venv .venv && source .venv/bin/activate
+cd mcp-app-store-connect
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
 app-store-connect-mcp            # stdio (padrão)
 app-store-connect-mcp --transport streamable-http --port 8000

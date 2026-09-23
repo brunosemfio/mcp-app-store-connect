@@ -316,6 +316,16 @@ def test_env_file_fills_missing_variables(monkeypatch, tmp_path):
     assert os.environ[auth.KEY_ID_ENV] == "FROMFILE12"
 
 
+def test_env_file_with_bom_keeps_first_variable(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_bytes(b"\xef\xbb\xbfAPP_STORE_CONNECT_VENDOR_NUMBER=87654321\r\n")
+    monkeypatch.setenv(auth.ENV_FILE_ENV, str(env_file))
+    monkeypatch.delenv(auth.VENDOR_NUMBER_ENV, raising=False)
+    auth.reset_cache()
+
+    assert auth.get_vendor_number() == "87654321"
+
+
 def test_real_environment_wins_over_env_file(monkeypatch, tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text("APP_STORE_CONNECT_VENDOR_NUMBER=11111111\n")
